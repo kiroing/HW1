@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+    </style>
+</head>
+
+<body>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/84/three.min.js">
+    </script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.min.js"></script>
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://jyunming-chen.github.io/tutsplus/js/KeyboardState.js"></script>
+    <script src="./MTLLoader.js"></script>
+    <script src="./OBJLoader.js"></script>
+
+    <script>
+      
+
+        var camera, camera2, scene, renderer, geometry, material, mesh, light, controls, controls2;
+        var k = 0, sign = 1;
+
+        var keyboard = new KeyboardState();
+        var clock;
+		var car;
+        var Tower;
+        var pos = new THREE.Vector3();
+        var speed, angle, vel;
+
+        (function () {
+            Math.clamp = function (val, min, max) {
+                return Math.min(Math.max(val, min), max);
+            }
+        })();
+
+
+        init();
+        animate();
+
+        function init() {
+            clock = new THREE.Clock();
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+            camera2 = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 1000);
+
+            camera2.position.x = 300;
+            camera2.position.y = 400;
+            camera2.position.z = 200;
+
+
+            camera.position.x = 180;
+            camera.position.y = 70;
+            camera.position.z = 0;
+
+            scene.add(camera);
+            scene.add(camera2);
+
+            var ground = buildGround();
+
+            scene.add(ground);
+
+            buildTower(-100, 0, 0, Math.PI / 2);
+            // buildTower(-100, 0, -50, Math.PI / 2);
+            // buildTower(-160, 0, 50, Math.PI / 2);
+            // buildTower(-160, 0, -50, Math.PI / 2);
+          
+            buildCar();
+
+            var ambient = new THREE.AmbientLight(0x444444);
+            scene.add(ambient);
+
+            var directionalLight = new THREE.DirectionalLight(0xffffff);
+            directionalLight.position.set(1, 1, 1).normalize();
+            scene.add(directionalLight);
+
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x888888);
+            renderer.autoClear = false;
+
+            speed = 0.0;
+            angle = 0.0;
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls2 = new THREE.OrbitControls(camera2, renderer.domElement);
+            controls2.enableKeys = false
+            window.addEventListener('resize', onWindowResize, false);
+
+            document.body.appendChild(renderer.domElement);
+        }
+        function unitize(object, targetSize) {
+
+            // find bounding box of 'object'
+            var box3 = new THREE.Box3();
+            box3.setFromObject(object);
+            var size = new THREE.Vector3();
+            size.subVectors(box3.max, box3.min);
+            var center = new THREE.Vector3();
+            center.addVectors(box3.max, box3.min).multiplyScalar(0.5);
+
+            console.log('center: ' + center.x + ', ' + center.y + ', ' + center.z);
+            console.log('size: ' + size.x + ', ' + size.y + ', ' + size.z);
+
+            // uniform scaling according to objSize
+            var objSize = findMax(size);
+            var scaleSet = targetSize / objSize;
+
+            var theObject = new THREE.Object3D();
+            theObject.add(object);
+            object.scale.set(scaleSet, scaleSet, scaleSet);
+            object.position.set(-center.x * scaleSet, -center.y * scaleSet + size.y / 2 * scaleSet, -center.z * scaleSet);
+
+            return theObject;
+
+            // helper function
+            function findMax(v) {
+                if (v.x > v.y) {
+                    return v.x > v.z ? v.x : v.z;
+                } else { // v.y > v.x
+                    return v.y > v.z ? v.y : v.z;
+                }
+            }
+
+        }
+      
+   
+        function buildCar() {
+            // THREE.Loader.Handlers.add(/\.dds$/i, new THREE.DDSLoader());
+
+            var onProgress = function (xhr) {
+                if (xhr.lengthComputable) {
+                    var percentComplete = xhr.loaded / xhr.total * 100;
+                    console.log(Math.round(percentComplete, 2) + '% downloaded');
+                }
+            };
+
+            var onError = function (xhr) { };
+
+            var texture = new THREE.Texture();
+            var mtlLoader = new THREE.MTLLoader();
+			
+            mtlLoader.load('https://kiroing.github.io/HW1/IS3.mtl', function (materials) {
+
+                materials.preload();
+
+                var objLoader = new THREE.OBJLoader();
+                objLoader.setMaterials(materials);
+                
+                objLoader.load('https://kiroing.github.io/HW1/IS3.obj', function (object) {
+
+                    var theObject = unitize(object, 40);
+                    theObject.position.set(0, 0, 0);
+                    scene.add(theObject);
+
+                    car = theObject;
+
+                    theObject.traverse(function (mesh) {
+                        if (mesh instanceof THREE.Mesh) {
+                            mesh.material.bumpScale = 50;
+                        }
+                    });
+
+                    scene.add(new THREE.BoxHelper(theObject));
+                    object.traverse(
+                        function (mesh) {
+                            if (mesh instanceof THREE.Mesh) {
+                                mesh.material.side = THREE.DoubleSide;
+                            }
+                        });
+                });
+            }, onProgress, onError);
+        }
+		     function buildTower(x, y, z, rotateAngle) {
+           
+            var texture = new THREE.Texture();
+            var mtlLoader = new THREE.MTLLoader();
+            
+            mtlLoader.load('https://sonicray.github.io/I4B33/HW3/tower.mtl', function (materials) {
+
+                materials.preload();
+
+                var objLoader = new THREE.OBJLoader();
+                objLoader.setMaterials(materials);
+                
+                objLoader.load('https://sonicray.github.io/I4B33/HW3/tower.obj', function (object) {
+
+                    var theObject = unitize(object, 100);
+                    Tower = theObject;
+                    theObject.position.set(x, y, z);
+                    theObject.rotation.y = rotateAngle;
+                    theObject.traverse(function (mesh) {
+                        if (mesh instanceof THREE.Mesh) {
+                            mesh.material.bumpScale = 20;
+                        }
+                    });
+
+                    scene.add(new THREE.BoxHelper(theObject));
+                    scene.add(theObject);
+                   
+                    object.traverse(
+                        function (mesh) {
+                            if (mesh instanceof THREE.Mesh) {
+                                mesh.material.side = THREE.DoubleSide;
+                            }
+                        });
+                });
+            });
+        }
+		
+		function buildGround() {
+            var textureLoader = new THREE.TextureLoader();
+
+            var texture = textureLoader.load('https://sonicray.github.io/I4B33/HW3/Color.jpg', function (texture) {
+
+                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                texture.offset.set(0, 0);
+                texture.repeat.set(1000, 1000);
+            });
+
+
+            var geometry = new THREE.BoxGeometry(10000, 0.5, 10000);
+            var material = new THREE.MeshBasicMaterial({ map: texture });
+            var ground = new THREE.Mesh(geometry, material);
+
+            return ground;
+        }
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera2.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            camera2.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        function update(dt) {
+            keyboard.update();
+            if (keyboard.pressed("A"))
+                if (speed >= 0)
+                    angle += 0.02;
+                else
+                    angle -= 0.02;
+            if (keyboard.pressed("D"))
+                if (speed >= 0)
+                    angle -= 0.02;
+                else
+                    angle += 0.02;
+            if (keyboard.pressed("W"))
+                speed += 1;
+            if (keyboard.pressed("S"))
+                speed -= 1;
+
+            if (speed >= 100) {
+                speed = 100;
+            }
+            if (speed <= -100) {
+                speed = -100;
+            }
+            
+            vel = new THREE.Vector3(-speed, 0, 0);
+
+            vel.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+            pos.add(vel.clone().multiplyScalar(dt));
+        }
+        var isCrash = false;
+        function animate() {
+            controls.update();
+            var dt = clock.getDelta();
+            update(dt);
+            if (car != undefined && Tower != undefined) {
+                car.position.copy(pos);
+                car.rotation.y = angle;
+                camera.rotation.y = angle;
+                camera.position.set(car.position.x + 70, 20, car.position.z);
+                camera.lookAt(car.position);
+                var distance = car.position.distanceTo(Tower.position);
+                if (distance < 25) {
+                    speed = 0;
+              
+                }
+          
+            
+            }
+
+            requestAnimationFrame(animate);
+            render();
+        }
+       
+
+   
+        function render() {
+            var WW = window.innerWidth;
+            var HH = window.innerHeight;
+
+
+            renderer.setScissor(k, k, WW - 2 * k, HH - 2 * k);
+            renderer.enableScissorTest(true);
+
+            renderer.clear();
+            camera.aspect = WW / 2 / HH;
+            camera.updateProjectionMatrix();
+
+            renderer.setViewport(0, 0, WW / 2, HH);
+            renderer.render(scene, camera);
+
+            camera2.aspect = WW / 2 / HH;
+            camera2.updateProjectionMatrix();
+
+            renderer.setViewport(WW / 2, 0, WW / 2, HH);
+            renderer.render(scene, camera2);
+        }
+
+    
+
+    </script>
+</body>
+</html>
